@@ -5,7 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const DOME_API_BASE = 'https://data-api.polymarket.com';
+// Polymarket Data API base URL
+const API_BASE = 'https://data-api.polymarket.com';
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -15,7 +16,7 @@ serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const endpoint = url.searchParams.get('endpoint') || 'v1/leaderboard';
+    const endpoint = url.searchParams.get('endpoint') || 'leaderboard';
     
     // Forward all other query params
     const params = new URLSearchParams();
@@ -25,33 +26,49 @@ serve(async (req) => {
       }
     });
 
-    const apiUrl = `${DOME_API_BASE}/${endpoint}${params.toString() ? '?' + params.toString() : ''}`;
+    // Build the API URL
+    const apiUrl = `${API_BASE}/${endpoint}${params.toString() ? '?' + params.toString() : ''}`;
     
-    console.log(`Fetching from DOME API: ${apiUrl}`);
+    console.log(`Fetching from Polymarket API: ${apiUrl}`);
 
-    const response = await fetch(apiUrl, {
+    // Try with API key first
+    const apiKey = Deno.env.get('DOME_API_KEY') || '';
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+      headers['X-API-Key'] = apiKey; // Some APIs use this header
+    }
+
+    let response = await fetch(apiUrl, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        // DOME API may use API key in header or query param
-        'Authorization': `Bearer ${Deno.env.get('DOME_API_KEY') || ''}`,
-      },
+      headers,
     });
 
-    if (!response.ok) {
-      console.error(`DOME API error: ${response.status} ${response.statusText}`);
-      // Try without auth header as fallback (some endpoints are public)
-      const publicResponse = await fetch(apiUrl);
-      if (!publicResponse.ok) {
-        throw new Error(`DOME API error: ${publicResponse.status}`);
-      }
-      const data = await publicResponse.json();
-      return new Response(JSON.stringify(data), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // If auth fails, try as public endpoint
+    if (response.status === 401 || response.status === 403) {
+      console.log('Auth failed, trying public access...');
+      response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
       });
     }
 
+    if (!response.ok) {
+      console.error(`API error: ${response.status} ${response.statusText}`);
+      const errorBody = await response.text();
+      console.error(`Error body: ${errorBody}`);
+      throw new Error(`API error: ${response.status}`);
+    }
+
     const data = await response.json();
+    console.log(`Successfully fetched ${Array.isArray(data) ? data.length : 'object'} items`);
     
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
