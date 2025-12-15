@@ -12,6 +12,7 @@ import Index from "./pages/Index";
 import CopySetup from "./pages/CopySetup";
 import Portfolio from "./pages/Portfolio";
 import WhaleDashboard from "./pages/WhaleDashboard";
+import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
                 <Route path="/copy/:whaleId" element={<CopySetup />} />
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/whale-dashboard" element={<WhaleDashboard />} />
+                <Route path="/auth" element={<Auth />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
