@@ -15,7 +15,7 @@ serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const endpoint = url.searchParams.get('endpoint') || 'trader-leaderboard-rankings';
+    const endpoint = url.searchParams.get('endpoint') || 'v1/leaderboard';
     
     // Forward all other query params
     const params = new URLSearchParams();
