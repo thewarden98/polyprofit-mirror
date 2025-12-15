@@ -9,6 +9,9 @@ import { config } from "@/lib/wagmi";
 import "@rainbow-me/rainbowkit/styles.css";
 
 import Index from "./pages/Index";
+import CopySetup from "./pages/CopySetup";
+import Portfolio from "./pages/Portfolio";
+import WhaleDashboard from "./pages/WhaleDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +27,9 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/" element={<Index />} />
+                <Route path="/copy/:whaleId" element={<CopySetup />} />
+                <Route path="/portfolio" element={<Portfolio />} />
+                <Route path="/whale-dashboard" element={<WhaleDashboard />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
