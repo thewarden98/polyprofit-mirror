@@ -5,8 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Polymarket Data API base URL
-const API_BASE = 'https://data-api.polymarket.com';
+// Polymarket Data API base URL (v1 endpoints)
+const API_BASE = 'https://data-api.polymarket.com/v1';
 
 serve(async (req) => {
   // Handle CORS preflight
