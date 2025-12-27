@@ -8,6 +8,8 @@ const corsHeaders = {
 // Polymarket APIs
 const DATA_API_BASE = 'https://data-api.polymarket.com';
 const GAMMA_API_BASE = 'https://gamma-api.polymarket.com';
+const CLOB_API_BASE = 'https://clob.polymarket.com';
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -49,6 +51,16 @@ serve(async (req) => {
         throw new Error('Query parameter required for markets endpoint');
       }
       apiUrl = `${GAMMA_API_BASE}/public-search?q=${encodeURIComponent(query)}&limit_per_type=30&optimized=true`;
+    } else if (endpoint === 'trending') {
+      // Get trending/popular markets
+      apiUrl = `${GAMMA_API_BASE}/events?active=true&closed=false&limit=20&order=volume&ascending=false`;
+    } else if (endpoint === 'orderbook') {
+      // Get order book for a specific market token
+      const tokenId = (payload?.tokenId ?? url.searchParams.get('tokenId')) as string | null;
+      if (!tokenId) {
+        throw new Error('tokenId parameter required for orderbook endpoint');
+      }
+      apiUrl = `${CLOB_API_BASE}/book?token_id=${encodeURIComponent(tokenId)}`;
     } else if (endpoint === 'positions') {
       // Get positions for a specific user
       const user = (payload?.user ?? url.searchParams.get('user')) as string | null;
@@ -106,12 +118,16 @@ serve(async (req) => {
       responseData = data?.profiles ?? [];
     } else if (endpoint === 'markets') {
       responseData = data?.events ?? [];
+    } else if (endpoint === 'trending') {
+      responseData = Array.isArray(data) ? data : (data?.events ?? []);
     }
     
     // Log sample data for debugging
     if (Array.isArray(responseData) && responseData.length > 0) {
       console.log(`Successfully fetched ${responseData.length} items`);
       console.log(`Sample item keys: ${Object.keys(responseData[0]).join(', ')}`);
+    } else if (endpoint === 'orderbook') {
+      console.log(`Orderbook response keys: ${Object.keys(responseData).join(', ')}`);
     } else {
       console.log(`Response data: ${JSON.stringify(responseData).slice(0, 500)}`);
     }
