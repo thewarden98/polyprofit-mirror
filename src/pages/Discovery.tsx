@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Loader2, ExternalLink, TrendingUp, TrendingDown, Clock, DollarSign, Users } from "lucide-react";
+import { Search, Loader2, ExternalLink, TrendingUp, TrendingDown, Clock, DollarSign, Users, Activity, BarChart3 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -52,7 +52,7 @@ export default function Discovery() {
           placeholder="Search markets... (e.g., 'Bitcoin', 'Election', 'Super Bowl')"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-12 py-6 text-lg bg-muted/30 border-border/50 focus:border-primary"
+          className="pl-12 py-6 text-lg bg-card text-foreground border-border/50 focus:border-primary placeholder:text-muted-foreground"
         />
       </div>
 
@@ -105,21 +105,37 @@ export default function Discovery() {
 
 function MarketCard({ market }: { market: PolymarketEvent }) {
   const isActive = market.active && !market.closed;
+  const primaryMarket = market.markets?.[0];
   
-  // Parse outcome prices if available
+  // Parse outcome prices and best bid/ask if available
   let yesPrice = 0.5;
   let noPrice = 0.5;
-  if (market.markets?.[0]?.outcomePrices) {
+  let bestBid = 0;
+  let bestAsk = 0;
+  let spread = 0;
+  
+  if (primaryMarket?.outcomePrices) {
     try {
-      const prices = Array.isArray(market.markets[0].outcomePrices) 
-        ? market.markets[0].outcomePrices 
-        : JSON.parse(market.markets[0].outcomePrices);
+      const prices = Array.isArray(primaryMarket.outcomePrices) 
+        ? primaryMarket.outcomePrices 
+        : JSON.parse(primaryMarket.outcomePrices);
       yesPrice = parseFloat(prices[0]) || 0.5;
       noPrice = parseFloat(prices[1]) || 0.5;
     } catch {
       // Use defaults if parsing fails
     }
   }
+  
+  if (primaryMarket) {
+    bestBid = primaryMarket.bestBid || 0;
+    bestAsk = primaryMarket.bestAsk || 0;
+    spread = primaryMarket.spread || (bestAsk - bestBid);
+  }
+
+  // Calculate total volume and liquidity from all markets in the event
+  const totalVolume = market.markets?.reduce((sum, m) => sum + (Number(m.volume) || 0), 0) || market.volume || 0;
+  const totalLiquidity = market.markets?.reduce((sum, m) => sum + (Number(m.liquidity) || 0), 0) || market.liquidity || 0;
+  const totalOpenInterest = market.markets?.reduce((sum, m) => sum + (Number(m.openInterest) || 0), 0) || market.openInterest || 0;
 
   return (
     <Card className={cn(
@@ -159,50 +175,89 @@ function MarketCard({ market }: { market: PolymarketEvent }) {
               >
                 {market.closed ? "Resolved" : isActive ? "Live" : "Upcoming"}
               </Badge>
-              {market.category && (
+              {market.endDate && (
                 <Badge variant="outline" className="text-xs">
-                  {market.category}
+                  <Clock className="w-3 h-3 mr-1" />
+                  {new Date(market.endDate).toLocaleDateString()}
                 </Badge>
               )}
             </div>
 
-            {/* Prices */}
+            {/* Best Odds - Yes/No */}
             {isActive && (
-              <div className="flex items-center gap-4 mb-3">
-                <div className="flex items-center gap-1">
-                  <TrendingUp className="w-4 h-4 text-success" />
-                  <span className="text-sm font-medium text-success">
-                    Yes {(yesPrice * 100).toFixed(0)}¢
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="bg-success/10 rounded-lg p-2 text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <TrendingUp className="w-4 h-4 text-success" />
+                    <span className="text-xs text-muted-foreground">Yes</span>
+                  </div>
+                  <span className="text-lg font-bold text-success">
+                    {(yesPrice * 100).toFixed(1)}¢
                   </span>
+                  {bestBid > 0 && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Bid: {(bestBid * 100).toFixed(1)}¢
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-1">
-                  <TrendingDown className="w-4 h-4 text-destructive" />
-                  <span className="text-sm font-medium text-destructive">
-                    No {(noPrice * 100).toFixed(0)}¢
+                <div className="bg-destructive/10 rounded-lg p-2 text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <TrendingDown className="w-4 h-4 text-destructive" />
+                    <span className="text-xs text-muted-foreground">No</span>
+                  </div>
+                  <span className="text-lg font-bold text-destructive">
+                    {(noPrice * 100).toFixed(1)}¢
                   </span>
+                  {bestAsk > 0 && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Ask: {(bestAsk * 100).toFixed(1)}¢
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* Stats */}
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <DollarSign className="w-3 h-3" />
-                <span>{formatNumber(market.volume)} vol</span>
+            {/* Spread indicator */}
+            {isActive && spread > 0 && (
+              <div className="text-xs text-muted-foreground mb-3">
+                Spread: {(spread * 100).toFixed(2)}¢
               </div>
-              <div className="flex items-center gap-1">
-                <Users className="w-3 h-3" />
-                <span>{formatNumber(market.liquidity)} liq</span>
-              </div>
-              {market.endDate && (
-                <div className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  <span>{new Date(market.endDate).toLocaleDateString()}</span>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         </div>
+
+        {/* Market Stats Grid */}
+        <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-border/50">
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
+              <DollarSign className="w-3 h-3" />
+              <span className="text-xs">Volume</span>
+            </div>
+            <span className="text-sm font-semibold text-foreground">{formatNumber(totalVolume)}</span>
+          </div>
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
+              <BarChart3 className="w-3 h-3" />
+              <span className="text-xs">Liquidity</span>
+            </div>
+            <span className="text-sm font-semibold text-foreground">{formatNumber(totalLiquidity)}</span>
+          </div>
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
+              <Activity className="w-3 h-3" />
+              <span className="text-xs">Open Int.</span>
+            </div>
+            <span className="text-sm font-semibold text-foreground">{formatNumber(totalOpenInterest)}</span>
+          </div>
+        </div>
+
+        {/* Sub-markets count if multiple */}
+        {market.markets && market.markets.length > 1 && (
+          <div className="mt-2 text-xs text-center text-muted-foreground">
+            <Users className="w-3 h-3 inline mr-1" />
+            {market.markets.length} outcomes in this market
+          </div>
+        )}
 
         {/* View on Polymarket */}
         <a
