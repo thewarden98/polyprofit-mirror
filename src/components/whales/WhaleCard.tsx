@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { TrendingUp, Users, Trophy, ExternalLink, Wallet, BarChart3 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Whale, PerformanceDataPoint } from "@/types";
 import { getCategoryInfo, getBadgeInfo, formatNumber, formatWallet } from "@/data/whaleHelpers";
 import { SparklineChart } from "./SparklineChart";
+import { TraderDetailModal } from "./TraderDetailModal";
 import { cn } from "@/lib/utils";
 
 interface WhaleCardProps {
@@ -15,12 +17,17 @@ interface WhaleCardProps {
 }
 
 export function WhaleCard({ whale, performanceData }: WhaleCardProps) {
+  const [detailOpen, setDetailOpen] = useState(false);
   const categoryInfo = getCategoryInfo(whale.category);
   const isPositive = whale.total_profit > 0;
   const roi = whale.total_volume > 0 ? ((whale.total_profit / whale.total_volume) * 100).toFixed(1) : "0.0";
 
   return (
-    <Card className="group relative overflow-hidden transition-all hover:border-primary/50 hover:glow-primary">
+    <>
+      <Card 
+        className="group relative overflow-hidden transition-all hover:border-primary/50 hover:glow-primary cursor-pointer"
+        onClick={() => setDetailOpen(true)}
+      >
       <CardContent className="p-4 md:p-5">
         <div className="flex flex-col gap-4">
           {/* Header Row */}
@@ -170,11 +177,12 @@ export function WhaleCard({ whale, performanceData }: WhaleCardProps) {
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+              onClick={(e) => e.stopPropagation()}
             >
               <ExternalLink className="w-3 h-3" />
               View on Polymarket
             </a>
-            <Link to={`/copy/${whale.id}`}>
+            <Link to={`/copy/${whale.id}`} onClick={(e) => e.stopPropagation()}>
               <Button size="sm" className="gradient-primary border-0 gap-1.5">
                 <TrendingUp className="w-4 h-4" />
                 Lock & Copy
@@ -184,5 +192,12 @@ export function WhaleCard({ whale, performanceData }: WhaleCardProps) {
         </div>
       </CardContent>
     </Card>
+
+    <TraderDetailModal 
+      whale={whale} 
+      open={detailOpen} 
+      onOpenChange={setDetailOpen} 
+    />
+  </>
   );
 }
