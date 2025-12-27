@@ -2,6 +2,34 @@ export type WhaleCategory = 'politics' | 'crypto' | 'sports' | 'entertainment' |
 export type CopyStatus = 'active' | 'completed' | 'cancelled';
 export type PositionOutcome = 'pending' | 'won' | 'lost';
 
+// Raw data from Polymarket API
+export interface PolymarketTrader {
+  proxyWallet: string;
+  name?: string;
+  userName?: string;
+  pseudonym?: string;
+  bio?: string;
+  profileImage?: string;
+  profileImageOptimized?: string;
+  xUsername?: string;
+  verifiedBadge?: boolean;
+  displayUsernamePublic?: boolean;
+  // Volume & PnL fields
+  volume_amount?: number;
+  volume_position?: number;
+  profile_profit?: number;
+  profile_volume?: number;
+  profile_value?: number;
+  vol?: number;
+  pnl?: number;
+  rank?: string | number;
+  // Position counts
+  openPositionCount?: number;
+  closedPositionCount?: number;
+  totalPositions?: number;
+  marketsTraded?: number;
+}
+
 export interface Whale {
   id: string;
   wallet_address: string;
@@ -11,14 +39,47 @@ export interface Whale {
   category: WhaleCategory;
   total_volume: number;
   total_profit: number;
+  portfolio_value: number;
   win_rate: number;
   total_trades: number;
+  open_positions: number;
+  closed_positions: number;
   winning_trades: number;
   follower_count: number;
   is_verified: boolean;
   badges: string[];
+  rank: number;
+  x_username: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface TraderPosition {
+  proxyWallet: string;
+  asset: string;
+  conditionId: string;
+  size: number;
+  avgPrice: number;
+  initialValue: number;
+  currentValue: number;
+  cashPnl: number;
+  percentPnl: number;
+  totalBought: number;
+  realizedPnl: number;
+  percentRealizedPnl: number;
+  curPrice: number;
+  redeemable: boolean;
+  mergeable: boolean;
+  title: string;
+  slug: string;
+  icon: string;
+  eventSlug: string;
+  outcome: string;
+  outcomeIndex: number;
+  oppositeOutcome: string;
+  oppositeAsset: string;
+  endDate: string;
+  negativeRisk: boolean;
 }
 
 export interface Copy {

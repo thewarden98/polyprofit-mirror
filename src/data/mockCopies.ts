@@ -1,45 +1,7 @@
-import { Copy, MirroredPosition, Whale } from "@/types";
-import { mockWhales } from "./mockWhales";
+import { Copy, MirroredPosition } from "@/types";
 
-// Demo: User has 2 active copy positions
-export const mockCopies: (Copy & { whale: Whale })[] = [
-  {
-    id: "copy-1",
-    user_id: "demo-user",
-    whale_id: "3",
-    locked_amount: 500,
-    current_value: 567.50,
-    profit_loss: 67.50,
-    whale_share_percent: 15,
-    platform_fee_percent: 5,
-    duration_days: 60,
-    start_date: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(), // 12 days ago
-    end_date: new Date(Date.now() + 48 * 24 * 60 * 60 * 1000).toISOString(), // 48 days from now
-    status: "active",
-    transaction_hash: "0x1234...5678",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    whale: mockWhales.find(w => w.id === "3")!,
-  },
-  {
-    id: "copy-2",
-    user_id: "demo-user",
-    whale_id: "1",
-    locked_amount: 250,
-    current_value: 231.25,
-    profit_loss: -18.75,
-    whale_share_percent: 12,
-    platform_fee_percent: 5,
-    duration_days: 60,
-    start_date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
-    end_date: new Date(Date.now() + 55 * 24 * 60 * 60 * 1000).toISOString(), // 55 days from now
-    status: "active",
-    transaction_hash: "0xabcd...ef01",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    whale: mockWhales.find(w => w.id === "1")!,
-  },
-];
+// Demo copies - will be replaced by live data when user has actual copies
+export const mockCopies: Copy[] = [];
 
 // Demo: Mirrored positions from the whales
 export const mockMirroredPositions: MirroredPosition[] = [
