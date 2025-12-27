@@ -5,9 +5,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Polymarket Data API base URL (no /v1 prefix - endpoints vary)
-const API_BASE = 'https://data-api.polymarket.com';
-
+// Polymarket APIs
+const DATA_API_BASE = 'https://data-api.polymarket.com';
+const GAMMA_API_BASE = 'https://gamma-api.polymarket.com';
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -16,55 +16,63 @@ serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const endpoint = url.searchParams.get('endpoint') || 'leaderboard';
-    
+
+    let payload: any = null;
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      try {
+        payload = await req.json();
+      } catch {
+        payload = null;
+      }
+    }
+
+    const endpoint = payload?.endpoint ?? url.searchParams.get('endpoint') ?? 'leaderboard';
+
     let apiUrl: string;
-    
+
     // Route to correct endpoint
     if (endpoint === 'leaderboard') {
       // Get top traders leaderboard
-      const limit = url.searchParams.get('limit') || '100';
-      apiUrl = `${API_BASE}/v1/leaderboard?limit=${limit}`;
+      const limit = String(payload?.limit ?? url.searchParams.get('limit') ?? '100');
+      apiUrl = `${DATA_API_BASE}/v1/leaderboard?limit=${limit}`;
     } else if (endpoint === 'search') {
-      // Search for users by username or wallet
-      const query = url.searchParams.get('query');
+      // Search markets/events/profiles via Gamma API and return profiles
+      const query = (payload?.query ?? url.searchParams.get('query') ?? url.searchParams.get('q')) as string | null;
       if (!query) {
         throw new Error('Query parameter required for search endpoint');
       }
-      // Use the profiles endpoint to search
-      apiUrl = `${API_BASE}/profiles?search=${encodeURIComponent(query)}&limit=50`;
+      apiUrl = `${GAMMA_API_BASE}/public-search?q=${encodeURIComponent(query)}&search_profiles=true&limit_per_type=50&optimized=true`;
     } else if (endpoint === 'positions') {
       // Get positions for a specific user
-      const user = url.searchParams.get('user');
+      const user = (payload?.user ?? url.searchParams.get('user')) as string | null;
       if (!user) {
         throw new Error('User parameter required for positions endpoint');
       }
-      apiUrl = `${API_BASE}/positions?user=${user}`;
+      apiUrl = `${DATA_API_BASE}/positions?user=${user}`;
     } else if (endpoint === 'profile') {
       // Get profile info for a user
-      const user = url.searchParams.get('user');
+      const user = (payload?.user ?? url.searchParams.get('user')) as string | null;
       if (!user) {
         throw new Error('User parameter required for profile endpoint');
       }
-      apiUrl = `${API_BASE}/profile?user=${user}`;
+      apiUrl = `${DATA_API_BASE}/profile?user=${user}`;
     } else if (endpoint === 'activity') {
       // Get activity for a user
-      const user = url.searchParams.get('user');
+      const user = (payload?.user ?? url.searchParams.get('user')) as string | null;
       if (!user) {
         throw new Error('User parameter required for activity endpoint');
       }
-      apiUrl = `${API_BASE}/activity?user=${user}&limit=50`;
+      apiUrl = `${DATA_API_BASE}/activity?user=${user}&limit=50`;
     } else {
-      // Generic endpoint passthrough
+      // Generic endpoint passthrough (Data API)
       const params = new URLSearchParams();
       url.searchParams.forEach((value, key) => {
         if (key !== 'endpoint') {
           params.append(key, value);
         }
       });
-      apiUrl = `${API_BASE}/${endpoint}${params.toString() ? '?' + params.toString() : ''}`;
+      apiUrl = `${DATA_API_BASE}/${endpoint}${params.toString() ? '?' + params.toString() : ''}`;
     }
-    
     console.log(`Fetching from Polymarket API: ${apiUrl}`);
 
     const response = await fetch(apiUrl, {
@@ -83,17 +91,20 @@ serve(async (req) => {
     }
 
     const data = await response.json();
+
+    // For search, return ONLY the matching profiles array (what the UI expects)
+    const responseData = endpoint === 'search' ? (data?.profiles ?? []) : data;
     
     // Log sample data for debugging
-    if (Array.isArray(data) && data.length > 0) {
-      console.log(`Successfully fetched ${data.length} items`);
-      console.log(`Sample item keys: ${Object.keys(data[0]).join(', ')}`);
-      console.log(`Sample item: ${JSON.stringify(data[0])}`);
+    if (Array.isArray(responseData) && responseData.length > 0) {
+      console.log(`Successfully fetched ${responseData.length} items`);
+      console.log(`Sample item keys: ${Object.keys(responseData[0]).join(', ')}`);
+      console.log(`Sample item: ${JSON.stringify(responseData[0])}`);
     } else {
-      console.log(`Response data: ${JSON.stringify(data).slice(0, 500)}`);
+      console.log(`Response data: ${JSON.stringify(responseData).slice(0, 500)}`);
     }
     
-    return new Response(JSON.stringify(data), {
+    return new Response(JSON.stringify(responseData), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
