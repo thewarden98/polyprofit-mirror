@@ -1,20 +1,22 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Clock, 
-  DollarSign, 
-  Activity, 
-  BarChart3, 
+import {
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  DollarSign,
+  Activity,
+  BarChart3,
   ExternalLink,
   Users,
   Calendar,
   Info,
-  BookOpen
+  BookOpen,
 } from "lucide-react";
 import { PolymarketEvent } from "@/hooks/usePolymarket";
 import { formatNumber } from "@/data/whaleHelpers";
@@ -27,11 +29,36 @@ interface MarketDetailModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function MarketDetailModal({ market, open, onOpenChange }: MarketDetailModalProps) {
-  if (!market) return null;
+export function MarketDetailModal({ market: baseMarket, open, onOpenChange }: MarketDetailModalProps) {
+  if (!baseMarket) return null;
+
+  const { data: fullMarket } = useQuery({
+    queryKey: ["polymarket-event-by-slug", baseMarket.slug],
+    queryFn: async (): Promise<PolymarketEvent> => {
+      const { data, error } = await supabase.functions.invoke("polymarket-proxy", {
+        body: { endpoint: "event", slug: baseMarket.slug },
+      });
+
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+
+      return data as PolymarketEvent;
+    },
+    enabled: open && !!baseMarket.slug,
+    staleTime: 60 * 1000,
+  });
+
+  const market = fullMarket ?? baseMarket;
 
   const isActive = market.active && !market.closed;
-  const primaryMarket = market.markets?.[0];
+
+  // Choose a market that actually has token IDs / order book enabled
+  const orderBookMarket =
+    market.markets?.find((m: any) => m?.acceptingOrders || m?.enableOrderBook) ||
+    market.markets?.find((m: any) => !!m?.clobTokenIds) ||
+    market.markets?.[0];
+
+  const primaryMarket = orderBookMarket;
 
   // Parse outcome prices
   let yesPrice = 0.5;
@@ -42,8 +69,8 @@ export function MarketDetailModal({ market, open, onOpenChange }: MarketDetailMo
 
   if (primaryMarket?.outcomePrices) {
     try {
-      const prices = Array.isArray(primaryMarket.outcomePrices) 
-        ? primaryMarket.outcomePrices 
+      const prices = Array.isArray(primaryMarket.outcomePrices)
+        ? primaryMarket.outcomePrices
         : JSON.parse(primaryMarket.outcomePrices);
       yesPrice = parseFloat(prices[0]) || 0.5;
       noPrice = parseFloat(prices[1]) || 0.5;
@@ -53,38 +80,32 @@ export function MarketDetailModal({ market, open, onOpenChange }: MarketDetailMo
   }
 
   if (primaryMarket) {
-    bestBid = primaryMarket.bestBid || 0;
-    bestAsk = primaryMarket.bestAsk || 0;
-    spread = primaryMarket.spread || (bestAsk - bestBid);
+    bestBid = (primaryMarket as any).bestBid || 0;
+    bestAsk = (primaryMarket as any).bestAsk || 0;
+    spread = (primaryMarket as any).spread || (bestAsk - bestBid);
   }
 
   // Aggregate market data
-  const totalVolume = market.markets?.reduce((sum, m) => sum + (Number(m.volume) || 0), 0) || market.volume || 0;
-  const totalLiquidity = market.markets?.reduce((sum, m) => sum + (Number(m.liquidity) || 0), 0) || market.liquidity || 0;
-  const totalOpenInterest = market.markets?.reduce((sum, m) => sum + (Number(m.openInterest) || 0), 0) || market.openInterest || 0;
+  const totalVolume = market.markets?.reduce((sum, m) => sum + (Number((m as any).volume) || 0), 0) || market.volume || 0;
+  const totalLiquidity = market.markets?.reduce((sum, m) => sum + (Number((m as any).liquidity) || 0), 0) || market.liquidity || 0;
+  const totalOpenInterest = market.markets?.reduce((sum, m) => sum + (Number((m as any).openInterest) || 0), 0) || market.openInterest || 0;
 
-  // Get token IDs for order book (Polymarket uses clobTokenIds - can be string or array)
+  // Get token IDs for order book (clobTokenIds can be a JSON string)
   let yesTokenId: string | undefined;
   let noTokenId: string | undefined;
-  
+
   if (primaryMarket) {
     const clobTokenIds = (primaryMarket as any)?.clobTokenIds;
     if (clobTokenIds) {
       try {
-        const tokenIds = typeof clobTokenIds === 'string' 
-          ? JSON.parse(clobTokenIds) 
-          : clobTokenIds;
+        const tokenIds = typeof clobTokenIds === "string" ? JSON.parse(clobTokenIds) : clobTokenIds;
         yesTokenId = tokenIds?.[0];
         noTokenId = tokenIds?.[1];
       } catch {
-        // Fallback to conditionId if parsing fails
-        yesTokenId = (primaryMarket as any)?.conditionId;
+        // leave undefined
       }
-    } else {
-      yesTokenId = (primaryMarket as any)?.conditionId;
     }
   }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
