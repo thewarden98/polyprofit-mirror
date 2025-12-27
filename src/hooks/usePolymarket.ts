@@ -2,20 +2,27 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Whale } from "@/types";
 
+// Actual API response structure from Polymarket leaderboard
 interface LeaderboardTrader {
-  name?: string;
-  profileAddress: string;
-  profileImage?: string;
-  volume: number;
+  rank: string;
+  proxyWallet: string;
+  userName: string;
+  xUsername?: string;
+  verifiedBadge: boolean;
+  vol: number;
   pnl: number;
-  positions: number;
-  markets: number;
-  rank?: number;
+  profileImage?: string;
 }
 
-// Transform DOME API data to our Whale format
+// Transform Polymarket API data to our Whale format
 function transformToWhale(trader: LeaderboardTrader, index: number): Whale {
-  const winRate = trader.pnl > 0 ? Math.min(50 + (trader.pnl / trader.volume) * 100, 95) : Math.max(30, 50 - Math.abs(trader.pnl / trader.volume) * 50);
+  const volume = trader.vol || 0;
+  const pnl = trader.pnl || 0;
+  const winRate = volume > 0 && pnl > 0 
+    ? Math.min(50 + (pnl / volume) * 100, 95) 
+    : volume > 0 
+      ? Math.max(30, 50 - Math.abs(pnl / volume) * 50)
+      : 50;
   
   // Determine category based on patterns (simplified heuristic)
   const categories = ['politics', 'crypto', 'sports', 'entertainment', 'general'] as const;
@@ -23,25 +30,28 @@ function transformToWhale(trader: LeaderboardTrader, index: number): Whale {
   
   // Generate badges based on performance
   const badges: string[] = [];
-  if (trader.volume > 100000) badges.push('whale');
+  if (volume > 100000) badges.push('whale');
   if (winRate > 70) badges.push('sharp-money');
-  if (trader.pnl > trader.volume * 0.2) badges.push('hot-streak');
+  if (pnl > volume * 0.2) badges.push('hot-streak');
   if (index < 10) badges.push('legend');
+  if (trader.verifiedBadge) badges.push('verified');
+
+  const estimatedTrades = Math.max(1, Math.floor(volume / 500));
 
   return {
-    id: trader.profileAddress,
-    wallet_address: trader.profileAddress,
-    username: trader.name || `Trader_${trader.profileAddress.slice(0, 6)}`,
+    id: trader.proxyWallet,
+    wallet_address: trader.proxyWallet,
+    username: trader.userName || `Trader_${trader.proxyWallet.slice(0, 6)}`,
     avatar_url: trader.profileImage || null,
     bio: null,
     category,
-    total_volume: trader.volume || 0,
-    total_profit: trader.pnl || 0,
+    total_volume: volume,
+    total_profit: pnl,
     win_rate: Math.round(winRate * 10) / 10,
-    total_trades: trader.positions || 0,
-    winning_trades: Math.round((trader.positions || 0) * (winRate / 100)),
-    follower_count: Math.floor(Math.random() * 5000) + 100, // Mock follower count
-    is_verified: trader.volume > 500000,
+    total_trades: estimatedTrades,
+    winning_trades: Math.round(estimatedTrades * (winRate / 100)),
+    follower_count: Math.floor(Math.random() * 5000) + 100,
+    is_verified: trader.verifiedBadge || volume > 500000,
     badges,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
