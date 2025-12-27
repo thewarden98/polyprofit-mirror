@@ -1,18 +1,20 @@
 import { useState } from "react";
-import { Search, Loader2, ExternalLink, TrendingUp, TrendingDown, Clock, DollarSign, Users, Activity, BarChart3 } from "lucide-react";
+import { Search, Loader2, TrendingUp, TrendingDown, Clock, DollarSign, Users, Activity, BarChart3 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Layout } from "@/components/layout/Layout";
 import { usePolymarketMarkets, PolymarketEvent } from "@/hooks/usePolymarket";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatNumber } from "@/data/whaleHelpers";
 import { cn } from "@/lib/utils";
+import { MarketDetailModal } from "@/components/whales/MarketDetailModal";
 
 export default function Discovery() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "active" | "closed">("all");
+  const [selectedMarket, setSelectedMarket] = useState<PolymarketEvent | null>(null);
   const debouncedSearch = useDebounce(searchQuery, 300);
 
   const { data: searchResults, isLoading } = usePolymarketMarkets(debouncedSearch);
@@ -94,16 +96,26 @@ export default function Discovery() {
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             {filteredMarkets.map((market) => (
-              <MarketCard key={market.id} market={market} />
+              <MarketCard 
+                key={market.id} 
+                market={market} 
+                onClick={() => setSelectedMarket(market)}
+              />
             ))}
           </div>
         </div>
       )}
+
+      <MarketDetailModal
+        market={selectedMarket}
+        open={!!selectedMarket}
+        onOpenChange={(open) => !open && setSelectedMarket(null)}
+      />
     </Layout>
   );
 }
 
-function MarketCard({ market }: { market: PolymarketEvent }) {
+function MarketCard({ market, onClick }: { market: PolymarketEvent; onClick: () => void }) {
   const isActive = market.active && !market.closed;
   const primaryMarket = market.markets?.[0];
   
@@ -138,10 +150,13 @@ function MarketCard({ market }: { market: PolymarketEvent }) {
   const totalOpenInterest = market.markets?.reduce((sum, m) => sum + (Number(m.openInterest) || 0), 0) || market.openInterest || 0;
 
   return (
-    <Card className={cn(
-      "group overflow-hidden transition-all hover:border-primary/50",
-      market.closed ? "opacity-75" : ""
-    )}>
+    <Card 
+      className={cn(
+        "group overflow-hidden transition-all hover:border-primary/50 cursor-pointer",
+        market.closed ? "opacity-75" : ""
+      )}
+      onClick={onClick}
+    >
       <CardContent className="p-4">
         <div className="flex gap-4">
           {/* Icon/Image */}
@@ -259,16 +274,10 @@ function MarketCard({ market }: { market: PolymarketEvent }) {
           </div>
         )}
 
-        {/* View on Polymarket */}
-        <a
-          href={`https://polymarket.com/event/${market.slug}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-3 pt-3 border-t border-border/50 flex items-center justify-center gap-1 text-sm text-primary hover:underline"
-        >
-          <ExternalLink className="w-4 h-4" />
-          View on Polymarket
-        </a>
+        {/* Click hint */}
+        <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-center gap-1 text-sm text-muted-foreground">
+          Click for details
+        </div>
       </CardContent>
     </Card>
   );
