@@ -192,3 +192,47 @@ export function usePolymarketSearch(query: string) {
     staleTime: 30 * 1000, // 30 seconds for search results
   });
 }
+
+// Market/Event type from Polymarket
+export interface PolymarketEvent {
+  id: string;
+  title: string;
+  slug: string;
+  description?: string;
+  image?: string;
+  icon?: string;
+  active: boolean;
+  closed: boolean;
+  volume: number;
+  liquidity: number;
+  startDate?: string;
+  endDate?: string;
+  category?: string;
+  markets?: {
+    id: string;
+    question: string;
+    outcomePrices: string;
+    outcomes: string;
+    volume?: string;
+  }[];
+}
+
+export function usePolymarketMarkets(query: string) {
+  return useQuery({
+    queryKey: ['polymarket-markets', query],
+    queryFn: async (): Promise<PolymarketEvent[]> => {
+      if (!query || query.length < 2) return [];
+
+      const { data, error } = await supabase.functions.invoke('polymarket-proxy', {
+        body: { endpoint: 'markets', query },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: query.length >= 2,
+    staleTime: 30 * 1000,
+  });
+}
