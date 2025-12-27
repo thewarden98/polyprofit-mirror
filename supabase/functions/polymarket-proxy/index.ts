@@ -54,6 +54,13 @@ serve(async (req) => {
     } else if (endpoint === 'trending') {
       // Get trending/popular markets
       apiUrl = `${GAMMA_API_BASE}/events?active=true&closed=false&limit=20&order=volume&ascending=false`;
+    } else if (endpoint === 'event') {
+      // Get full event payload by slug (needed for clobTokenIds / order book)
+      const slug = (payload?.slug ?? url.searchParams.get('slug')) as string | null;
+      if (!slug) {
+        throw new Error('slug parameter required for event endpoint');
+      }
+      apiUrl = `${GAMMA_API_BASE}/events/slug/${encodeURIComponent(slug)}`;
     } else if (endpoint === 'orderbook') {
       // Get order book for a specific market token
       const tokenId = (payload?.tokenId ?? url.searchParams.get('tokenId')) as string | null;
