@@ -158,3 +158,42 @@ export function usePolymarketProfile(walletAddress: string | undefined) {
     staleTime: 2 * 60 * 1000,
   });
 }
+
+export function usePolymarketSearch(query: string) {
+  return useQuery({
+    queryKey: ['polymarket-search', query],
+    queryFn: async (): Promise<Whale[]> => {
+      if (!query || query.length < 2) return [];
+
+      // Use the search endpoint via URL params
+      const searchUrl = new URL('https://uawtebnljltzzhumzzmk.supabase.co/functions/v1/polymarket-proxy');
+      searchUrl.searchParams.set('endpoint', 'search');
+      searchUrl.searchParams.set('query', query);
+
+      const response = await fetch(searchUrl.toString(), {
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
+
+      const searchData = await response.json();
+      
+      if (searchData?.error) throw new Error(searchData.error);
+      
+      if (Array.isArray(searchData)) {
+        return searchData.map((trader: PolymarketTrader, index: number) => 
+          transformToWhale(trader, index)
+        );
+      }
+      
+      return [];
+    },
+    enabled: query.length >= 2,
+    staleTime: 30 * 1000, // 30 seconds for search results
+  });
+}

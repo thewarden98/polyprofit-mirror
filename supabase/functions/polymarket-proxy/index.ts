@@ -25,6 +25,14 @@ serve(async (req) => {
       // Get top traders leaderboard
       const limit = url.searchParams.get('limit') || '100';
       apiUrl = `${API_BASE}/v1/leaderboard?limit=${limit}`;
+    } else if (endpoint === 'search') {
+      // Search for users by username or wallet
+      const query = url.searchParams.get('query');
+      if (!query) {
+        throw new Error('Query parameter required for search endpoint');
+      }
+      // Use the profiles endpoint to search
+      apiUrl = `${API_BASE}/profiles?search=${encodeURIComponent(query)}&limit=50`;
     } else if (endpoint === 'positions') {
       // Get positions for a specific user
       const user = url.searchParams.get('user');

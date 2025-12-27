@@ -8,28 +8,40 @@ import { Layout } from "@/components/layout/Layout";
 import { WhaleCard } from "@/components/whales/WhaleCard";
 import { CategoryFilter } from "@/components/whales/CategoryFilter";
 import { StatsHero } from "@/components/whales/StatsHero";
-import { usePolymarketLeaderboard } from "@/hooks/usePolymarket";
+import { usePolymarketLeaderboard, usePolymarketSearch } from "@/hooks/usePolymarket";
 import { generatePerformanceData } from "@/data/whaleHelpers";
 import { WhaleCategory } from "@/types";
+import { useDebounce } from "@/hooks/useDebounce";
 
 export default function Index() {
   const [selectedCategory, setSelectedCategory] = useState<WhaleCategory | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebounce(searchQuery, 300);
 
   const { data: whales, isLoading, error, refetch, isRefetching } = usePolymarketLeaderboard();
+  const { data: searchResults, isLoading: isSearching } = usePolymarketSearch(debouncedSearch);
 
-  const filteredWhales = useMemo(() => {
+  // Use search results if searching, otherwise filter leaderboard
+  const displayWhales = useMemo(() => {
+    // If we have a search query and search results, show those
+    if (debouncedSearch.length >= 2 && searchResults && searchResults.length > 0) {
+      return searchResults.filter((whale) => {
+        return selectedCategory === "all" || whale.category === selectedCategory;
+      });
+    }
+    
+    // Otherwise filter the leaderboard
     if (!whales) return [];
     return whales
       .filter((whale) => {
         const matchesCategory = selectedCategory === "all" || whale.category === selectedCategory;
-        const matchesSearch = !searchQuery || 
-          whale.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          whale.wallet_address.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = !debouncedSearch || debouncedSearch.length < 2 ||
+          whale.username?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+          whale.wallet_address.toLowerCase().includes(debouncedSearch.toLowerCase());
         return matchesCategory && matchesSearch;
       })
       .sort((a, b) => a.rank - b.rank);
-  }, [whales, selectedCategory, searchQuery]);
+  }, [whales, searchResults, selectedCategory, debouncedSearch]);
 
   // Calculate stats from whale data
   const totalVolume = whales?.reduce((sum, w) => sum + w.total_volume, 0) || 0;
@@ -80,9 +92,13 @@ export default function Index() {
 
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          {isSearching ? (
+            <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary animate-spin" />
+          ) : (
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          )}
           <Input
-            placeholder="Search by username or wallet..."
+            placeholder="Search all Polymarket traders..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -105,7 +121,7 @@ export default function Index() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredWhales.map((whale) => (
+          {displayWhales.map((whale) => (
             <WhaleCard
               key={whale.id}
               whale={whale}
@@ -115,9 +131,11 @@ export default function Index() {
         </div>
       )}
 
-      {filteredWhales.length === 0 && !isLoading && !error && (
+      {displayWhales.length === 0 && !isLoading && !isSearching && !error && (
         <div className="text-center py-12 text-muted-foreground">
-          No traders found matching your criteria.
+          {debouncedSearch.length >= 2 
+            ? "No traders found matching your search."
+            : "No traders found matching your criteria."}
         </div>
       )}
     </Layout>
