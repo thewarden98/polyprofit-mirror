@@ -63,9 +63,27 @@ export function MarketDetailModal({ market, open, onOpenChange }: MarketDetailMo
   const totalLiquidity = market.markets?.reduce((sum, m) => sum + (Number(m.liquidity) || 0), 0) || market.liquidity || 0;
   const totalOpenInterest = market.markets?.reduce((sum, m) => sum + (Number(m.openInterest) || 0), 0) || market.openInterest || 0;
 
-  // Get token IDs for order book (Polymarket uses clobTokenIds)
-  const yesTokenId = (primaryMarket as any)?.clobTokenIds?.[0] || (primaryMarket as any)?.conditionId;
-  const noTokenId = (primaryMarket as any)?.clobTokenIds?.[1];
+  // Get token IDs for order book (Polymarket uses clobTokenIds - can be string or array)
+  let yesTokenId: string | undefined;
+  let noTokenId: string | undefined;
+  
+  if (primaryMarket) {
+    const clobTokenIds = (primaryMarket as any)?.clobTokenIds;
+    if (clobTokenIds) {
+      try {
+        const tokenIds = typeof clobTokenIds === 'string' 
+          ? JSON.parse(clobTokenIds) 
+          : clobTokenIds;
+        yesTokenId = tokenIds?.[0];
+        noTokenId = tokenIds?.[1];
+      } catch {
+        // Fallback to conditionId if parsing fails
+        yesTokenId = (primaryMarket as any)?.conditionId;
+      }
+    } else {
+      yesTokenId = (primaryMarket as any)?.conditionId;
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
