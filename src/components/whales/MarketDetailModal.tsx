@@ -33,10 +33,10 @@ export function MarketDetailModal({ market: baseMarket, open, onOpenChange }: Ma
   if (!baseMarket) return null;
 
   const { data: fullMarket } = useQuery({
-    queryKey: ["polymarket-event-by-slug", baseMarket.slug],
+    queryKey: ["polymarket-event", baseMarket.id],
     queryFn: async (): Promise<PolymarketEvent> => {
       const { data, error } = await supabase.functions.invoke("polymarket-proxy", {
-        body: { endpoint: "event", slug: baseMarket.slug },
+        body: { endpoint: "event", id: baseMarket.id, slug: baseMarket.slug },
       });
 
       if (error) throw error;
@@ -44,7 +44,7 @@ export function MarketDetailModal({ market: baseMarket, open, onOpenChange }: Ma
 
       return data as PolymarketEvent;
     },
-    enabled: open && !!baseMarket.slug,
+    enabled: open && !!baseMarket.id,
     staleTime: 60 * 1000,
   });
 
