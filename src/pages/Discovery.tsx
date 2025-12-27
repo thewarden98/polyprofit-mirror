@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Loader2, TrendingUp, TrendingDown, Clock, DollarSign, Users, Activity, BarChart3 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -7,17 +7,27 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Layout } from "@/components/layout/Layout";
 import { usePolymarketMarkets, PolymarketEvent } from "@/hooks/usePolymarket";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useSearchHistory } from "@/hooks/useSearchHistory";
 import { formatNumber } from "@/data/whaleHelpers";
 import { cn } from "@/lib/utils";
 import { MarketDetailModal } from "@/components/whales/MarketDetailModal";
+import { ForYouSection } from "@/components/whales/ForYouSection";
 
 export default function Discovery() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "active" | "closed">("all");
   const [selectedMarket, setSelectedMarket] = useState<PolymarketEvent | null>(null);
   const debouncedSearch = useDebounce(searchQuery, 300);
+  const { addSearch } = useSearchHistory();
 
   const { data: searchResults, isLoading } = usePolymarketMarkets(debouncedSearch);
+
+  // Track searches when user performs a search
+  useEffect(() => {
+    if (debouncedSearch.length >= 2 && searchResults && searchResults.length > 0) {
+      addSearch(debouncedSearch);
+    }
+  }, [debouncedSearch, searchResults, addSearch]);
 
   // Filter by status
   const filteredMarkets = searchResults?.filter(market => {
@@ -26,6 +36,8 @@ export default function Discovery() {
     if (activeTab === "closed") return market.closed;
     return true;
   }) || [];
+
+  const showForYou = debouncedSearch.length < 2;
 
   return (
     <Layout>
@@ -58,52 +70,53 @@ export default function Discovery() {
         />
       </div>
 
-      {/* Status Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="mb-6">
-        <TabsList className="w-full max-w-md">
-          <TabsTrigger value="all" className="flex-1">All Markets</TabsTrigger>
-          <TabsTrigger value="active" className="flex-1">Active</TabsTrigger>
-          <TabsTrigger value="closed" className="flex-1">Resolved</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {/* For You Section - shown when not searching */}
+      {showForYou && (
+        <ForYouSection onMarketClick={setSelectedMarket} />
+      )}
+
+      {/* Status Tabs - shown when searching */}
+      {!showForYou && (
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="mb-6">
+          <TabsList className="w-full max-w-md">
+            <TabsTrigger value="all" className="flex-1">All Markets</TabsTrigger>
+            <TabsTrigger value="active" className="flex-1">Active</TabsTrigger>
+            <TabsTrigger value="closed" className="flex-1">Resolved</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
 
       {/* Results */}
-      {debouncedSearch.length < 2 ? (
-        <div className="text-center py-16">
-          <Search className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-medium text-muted-foreground">Start searching</h3>
-          <p className="text-sm text-muted-foreground/70 mt-1">
-            Enter at least 2 characters to search for markets
-          </p>
-        </div>
-      ) : isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="ml-3 text-muted-foreground">Searching markets...</span>
-        </div>
-      ) : filteredMarkets.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="text-4xl mb-4">🔍</div>
-          <h3 className="text-lg font-medium text-muted-foreground">No markets found</h3>
-          <p className="text-sm text-muted-foreground/70 mt-1">
-            Try a different search term
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Found {filteredMarkets.length} market{filteredMarkets.length !== 1 ? "s" : ""}
-          </p>
-          <div className="grid gap-4 md:grid-cols-2">
-            {filteredMarkets.map((market) => (
-              <MarketCard 
-                key={market.id} 
-                market={market} 
-                onClick={() => setSelectedMarket(market)}
-              />
-            ))}
+      {!showForYou && (
+        isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <span className="ml-3 text-muted-foreground">Searching markets...</span>
           </div>
-        </div>
+        ) : filteredMarkets.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="text-4xl mb-4">🔍</div>
+            <h3 className="text-lg font-medium text-muted-foreground">No markets found</h3>
+            <p className="text-sm text-muted-foreground/70 mt-1">
+              Try a different search term
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Found {filteredMarkets.length} market{filteredMarkets.length !== 1 ? "s" : ""}
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              {filteredMarkets.map((market) => (
+                <MarketCard 
+                  key={market.id} 
+                  market={market} 
+                  onClick={() => setSelectedMarket(market)}
+                />
+              ))}
+            </div>
+          </div>
+        )
       )}
 
       <MarketDetailModal
@@ -114,7 +127,6 @@ export default function Discovery() {
     </Layout>
   );
 }
-
 function MarketCard({ market, onClick }: { market: PolymarketEvent; onClick: () => void }) {
   const isActive = market.active && !market.closed;
   const primaryMarket = market.markets?.[0];
