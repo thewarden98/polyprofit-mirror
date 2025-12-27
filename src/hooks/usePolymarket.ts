@@ -42,12 +42,20 @@ function transformToWhale(trader: PolymarketTrader, index: number): Whale {
   const closedPositions = trader.closedPositionCount || 0;
   const totalPositions = trader.totalPositions || trader.marketsTraded || openPositions + closedPositions;
 
+  const avatarUrl = (() => {
+    const optimized = (trader as any).profileImageOptimized;
+    if (typeof optimized === "string") return optimized;
+    if (optimized?.imageUrlOptimized) return optimized.imageUrlOptimized;
+    if (optimized?.imageUrlSource) return optimized.imageUrlSource;
+    return trader.profileImage || null;
+  })();
+
   return {
     id: trader.proxyWallet,
     wallet_address: trader.proxyWallet,
     username,
-    avatar_url: trader.profileImageOptimized || trader.profileImage || null,
-    bio: trader.bio || null,
+    avatar_url: avatarUrl,
+    bio: (trader as any).bio || null,
     category,
     total_volume: volume,
     total_profit: pnl,
@@ -57,11 +65,11 @@ function transformToWhale(trader: PolymarketTrader, index: number): Whale {
     open_positions: openPositions,
     closed_positions: closedPositions,
     winning_trades: Math.round(totalPositions * (winRate / 100)),
-    follower_count: 0, // Not available from API
-    is_verified: trader.verifiedBadge || false,
+    follower_count: 0, // Not available from APIs used
+    is_verified: !!(trader as any).verifiedBadge,
     badges,
     rank,
-    x_username: trader.xUsername || null,
+    x_username: (trader as any).xUsername || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -165,32 +173,19 @@ export function usePolymarketSearch(query: string) {
     queryFn: async (): Promise<Whale[]> => {
       if (!query || query.length < 2) return [];
 
-      // Use the search endpoint via URL params
-      const searchUrl = new URL('https://uawtebnljltzzhumzzmk.supabase.co/functions/v1/polymarket-proxy');
-      searchUrl.searchParams.set('endpoint', 'search');
-      searchUrl.searchParams.set('query', query);
-
-      const response = await fetch(searchUrl.toString(), {
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          'Content-Type': 'application/json',
-        },
+      const { data, error } = await supabase.functions.invoke('polymarket-proxy', {
+        body: { endpoint: 'search', query },
       });
 
-      if (!response.ok) {
-        throw new Error('Search failed');
-      }
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
-      const searchData = await response.json();
-      
-      if (searchData?.error) throw new Error(searchData.error);
-      
-      if (Array.isArray(searchData)) {
-        return searchData.map((trader: PolymarketTrader, index: number) => 
+      if (Array.isArray(data)) {
+        return data.map((trader: PolymarketTrader, index: number) =>
           transformToWhale(trader, index)
         );
       }
-      
+
       return [];
     },
     enabled: query.length >= 2,
