@@ -36,12 +36,19 @@ serve(async (req) => {
       const limit = String(payload?.limit ?? url.searchParams.get('limit') ?? '100');
       apiUrl = `${DATA_API_BASE}/v1/leaderboard?limit=${limit}`;
     } else if (endpoint === 'search') {
-      // Search markets/events/profiles via Gamma API and return profiles
+      // Search profiles via Gamma API
       const query = (payload?.query ?? url.searchParams.get('query') ?? url.searchParams.get('q')) as string | null;
       if (!query) {
         throw new Error('Query parameter required for search endpoint');
       }
       apiUrl = `${GAMMA_API_BASE}/public-search?q=${encodeURIComponent(query)}&search_profiles=true&limit_per_type=50&optimized=true`;
+    } else if (endpoint === 'markets') {
+      // Search markets/events via Gamma API
+      const query = (payload?.query ?? url.searchParams.get('query') ?? url.searchParams.get('q')) as string | null;
+      if (!query) {
+        throw new Error('Query parameter required for markets endpoint');
+      }
+      apiUrl = `${GAMMA_API_BASE}/public-search?q=${encodeURIComponent(query)}&limit_per_type=30&optimized=true`;
     } else if (endpoint === 'positions') {
       // Get positions for a specific user
       const user = (payload?.user ?? url.searchParams.get('user')) as string | null;
@@ -92,14 +99,19 @@ serve(async (req) => {
 
     const data = await response.json();
 
-    // For search, return ONLY the matching profiles array (what the UI expects)
-    const responseData = endpoint === 'search' ? (data?.profiles ?? []) : data;
+    // For search, return ONLY the matching profiles array
+    // For markets, return the events array
+    let responseData = data;
+    if (endpoint === 'search') {
+      responseData = data?.profiles ?? [];
+    } else if (endpoint === 'markets') {
+      responseData = data?.events ?? [];
+    }
     
     // Log sample data for debugging
     if (Array.isArray(responseData) && responseData.length > 0) {
       console.log(`Successfully fetched ${responseData.length} items`);
       console.log(`Sample item keys: ${Object.keys(responseData[0]).join(', ')}`);
-      console.log(`Sample item: ${JSON.stringify(responseData[0])}`);
     } else {
       console.log(`Response data: ${JSON.stringify(responseData).slice(0, 500)}`);
     }
