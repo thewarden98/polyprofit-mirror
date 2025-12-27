@@ -111,10 +111,14 @@ function MarketCard({ market }: { market: PolymarketEvent }) {
   let noPrice = 0.5;
   if (market.markets?.[0]?.outcomePrices) {
     try {
-      const prices = JSON.parse(market.markets[0].outcomePrices);
+      const prices = Array.isArray(market.markets[0].outcomePrices) 
+        ? market.markets[0].outcomePrices 
+        : JSON.parse(market.markets[0].outcomePrices);
       yesPrice = parseFloat(prices[0]) || 0.5;
       noPrice = parseFloat(prices[1]) || 0.5;
-    } catch {}
+    } catch {
+      // Use defaults if parsing fails
+    }
   }
 
   return (
