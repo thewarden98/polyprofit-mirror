@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Search, RefreshCw, AlertCircle } from "lucide-react";
+import { Search, RefreshCw, AlertCircle, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -9,20 +9,17 @@ import { WhaleCard } from "@/components/whales/WhaleCard";
 import { CategoryFilter } from "@/components/whales/CategoryFilter";
 import { StatsHero } from "@/components/whales/StatsHero";
 import { usePolymarketLeaderboard } from "@/hooks/usePolymarket";
-import { mockWhales, generatePerformanceData } from "@/data/mockWhales";
+import { generatePerformanceData } from "@/data/whaleHelpers";
 import { WhaleCategory } from "@/types";
 
 export default function Index() {
   const [selectedCategory, setSelectedCategory] = useState<WhaleCategory | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { data: liveWhales, isLoading, error, refetch, isRefetching } = usePolymarketLeaderboard();
-
-  // Use live data if available, fallback to mock data
-  const whales = liveWhales && liveWhales.length > 0 ? liveWhales : mockWhales;
-  const isUsingMockData = !liveWhales || liveWhales.length === 0;
+  const { data: whales, isLoading, error, refetch, isRefetching } = usePolymarketLeaderboard();
 
   const filteredWhales = useMemo(() => {
+    if (!whales) return [];
     return whales
       .filter((whale) => {
         const matchesCategory = selectedCategory === "all" || whale.category === selectedCategory;
@@ -31,37 +28,40 @@ export default function Index() {
           whale.wallet_address.toLowerCase().includes(searchQuery.toLowerCase());
         return matchesCategory && matchesSearch;
       })
-      .sort((a, b) => b.win_rate - a.win_rate);
+      .sort((a, b) => a.rank - b.rank);
   }, [whales, selectedCategory, searchQuery]);
 
   // Calculate stats from whale data
-  const totalVolume = whales.reduce((sum, w) => sum + w.total_volume, 0);
-  const topPerformer = whales.reduce((best, w) => 
-    w.total_profit > best.total_profit ? w : best, whales[0]);
+  const totalVolume = whales?.reduce((sum, w) => sum + w.total_volume, 0) || 0;
+  const topPerformer = whales?.reduce((best, w) => 
+    w.total_profit > best.total_profit ? w : best, whales?.[0]) || null;
 
   return (
     <Layout>
       <StatsHero
         totalLocked={totalVolume}
-        activeCopiers={whales.reduce((sum, w) => sum + w.follower_count, 0)}
-        topPerformerToday={topPerformer?.username || "Unknown"}
-        topPerformerGain={topPerformer ? (topPerformer.total_profit / topPerformer.total_volume) * 100 : 0}
+        activeCopiers={whales?.length || 0}
+        topPerformerToday={topPerformer?.username || topPerformer?.wallet_address?.slice(0, 10) || "—"}
+        topPerformerGain={topPerformer && topPerformer.total_volume > 0 
+          ? (topPerformer.total_profit / topPerformer.total_volume) * 100 
+          : 0}
       />
 
       {/* Status bar */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <div className={`w-2 h-2 rounded-full ${isUsingMockData ? 'bg-yellow-500' : 'bg-success'}`} />
-          <span>{isUsingMockData ? 'Demo data' : 'Live from Polymarket'}</span>
-          {error && (
-            <span className="text-destructive">• API error</span>
-          )}
+          <div className={`w-2 h-2 rounded-full ${error ? 'bg-destructive' : whales ? 'bg-success' : 'bg-yellow-500'}`} />
+          <span>
+            {isLoading ? 'Loading live data...' : 
+             error ? 'Connection error' : 
+             `${whales?.length || 0} traders from Polymarket`}
+          </span>
         </div>
         <Button 
           variant="ghost" 
           size="sm" 
           onClick={() => refetch()}
-          disabled={isRefetching}
+          disabled={isRefetching || isLoading}
           className="gap-2"
         >
           <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin' : ''}`} />
@@ -73,7 +73,7 @@ export default function Index() {
         <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Failed to fetch live data. Showing demo whales. {error.message}
+            Failed to fetch live data from Polymarket API. {error.message}
           </AlertDescription>
         </Alert>
       )}
@@ -82,7 +82,7 @@ export default function Index() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search whales..."
+            placeholder="Search by username or wallet..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -92,27 +92,32 @@ export default function Index() {
       </div>
 
       {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-64 rounded-xl" />
-          ))}
+        <div className="space-y-4">
+          <div className="flex items-center justify-center gap-2 py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            <span className="text-muted-foreground">Fetching live trader data...</span>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[...Array(6)].map((_, i) => (
+              <Skeleton key={i} className="h-72 rounded-xl" />
+            ))}
+          </div>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredWhales.map((whale, index) => (
+          {filteredWhales.map((whale) => (
             <WhaleCard
               key={whale.id}
               whale={whale}
               performanceData={generatePerformanceData(whale)}
-              rank={index + 1}
             />
           ))}
         </div>
       )}
 
-      {filteredWhales.length === 0 && !isLoading && (
+      {filteredWhales.length === 0 && !isLoading && !error && (
         <div className="text-center py-12 text-muted-foreground">
-          No whales found matching your criteria.
+          No traders found matching your criteria.
         </div>
       )}
     </Layout>

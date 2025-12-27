@@ -5,8 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Polymarket Data API base URL (v1 endpoints)
-const API_BASE = 'https://data-api.polymarket.com/v1';
+// Polymarket Data API base URL (no /v1 prefix - endpoints vary)
+const API_BASE = 'https://data-api.polymarket.com';
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -18,47 +18,54 @@ serve(async (req) => {
     const url = new URL(req.url);
     const endpoint = url.searchParams.get('endpoint') || 'leaderboard';
     
-    // Forward all other query params
-    const params = new URLSearchParams();
-    url.searchParams.forEach((value, key) => {
-      if (key !== 'endpoint') {
-        params.append(key, value);
+    let apiUrl: string;
+    
+    // Route to correct endpoint
+    if (endpoint === 'leaderboard') {
+      // Get top traders leaderboard
+      const limit = url.searchParams.get('limit') || '100';
+      apiUrl = `${API_BASE}/v1/leaderboard?limit=${limit}`;
+    } else if (endpoint === 'positions') {
+      // Get positions for a specific user
+      const user = url.searchParams.get('user');
+      if (!user) {
+        throw new Error('User parameter required for positions endpoint');
       }
-    });
-
-    // Build the API URL
-    const apiUrl = `${API_BASE}/${endpoint}${params.toString() ? '?' + params.toString() : ''}`;
+      apiUrl = `${API_BASE}/positions?user=${user}`;
+    } else if (endpoint === 'profile') {
+      // Get profile info for a user
+      const user = url.searchParams.get('user');
+      if (!user) {
+        throw new Error('User parameter required for profile endpoint');
+      }
+      apiUrl = `${API_BASE}/profile?user=${user}`;
+    } else if (endpoint === 'activity') {
+      // Get activity for a user
+      const user = url.searchParams.get('user');
+      if (!user) {
+        throw new Error('User parameter required for activity endpoint');
+      }
+      apiUrl = `${API_BASE}/activity?user=${user}&limit=50`;
+    } else {
+      // Generic endpoint passthrough
+      const params = new URLSearchParams();
+      url.searchParams.forEach((value, key) => {
+        if (key !== 'endpoint') {
+          params.append(key, value);
+        }
+      });
+      apiUrl = `${API_BASE}/${endpoint}${params.toString() ? '?' + params.toString() : ''}`;
+    }
     
     console.log(`Fetching from Polymarket API: ${apiUrl}`);
 
-    // Try with API key first
-    const apiKey = Deno.env.get('DOME_API_KEY') || '';
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
-    
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-      headers['X-API-Key'] = apiKey; // Some APIs use this header
-    }
-
-    let response = await fetch(apiUrl, {
+    const response = await fetch(apiUrl, {
       method: 'GET',
-      headers,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
     });
-
-    // If auth fails, try as public endpoint
-    if (response.status === 401 || response.status === 403) {
-      console.log('Auth failed, trying public access...');
-      response = await fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      });
-    }
 
     if (!response.ok) {
       console.error(`API error: ${response.status} ${response.statusText}`);
@@ -68,7 +75,15 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    console.log(`Successfully fetched ${Array.isArray(data) ? data.length : 'object'} items`);
+    
+    // Log sample data for debugging
+    if (Array.isArray(data) && data.length > 0) {
+      console.log(`Successfully fetched ${data.length} items`);
+      console.log(`Sample item keys: ${Object.keys(data[0]).join(', ')}`);
+      console.log(`Sample item: ${JSON.stringify(data[0])}`);
+    } else {
+      console.log(`Response data: ${JSON.stringify(data).slice(0, 500)}`);
+    }
     
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -1,23 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Whale } from "@/types";
-
-// Actual API response structure from Polymarket leaderboard
-interface LeaderboardTrader {
-  rank: string;
-  proxyWallet: string;
-  userName: string;
-  xUsername?: string;
-  verifiedBadge: boolean;
-  vol: number;
-  pnl: number;
-  profileImage?: string;
-}
+import { Whale, PolymarketTrader, TraderPosition } from "@/types";
 
 // Transform Polymarket API data to our Whale format
-function transformToWhale(trader: LeaderboardTrader, index: number): Whale {
-  const volume = trader.vol || 0;
-  const pnl = trader.pnl || 0;
+function transformToWhale(trader: PolymarketTrader, index: number): Whale {
+  // Handle various field names from different API responses
+  const volume = trader.volume_amount || trader.profile_volume || trader.vol || 0;
+  const pnl = trader.profile_profit || trader.pnl || 0;
+  const portfolioValue = trader.profile_value || 0;
+  const rank = typeof trader.rank === 'string' ? parseInt(trader.rank) : (trader.rank || trader.volume_position || index + 1);
+  
+  // Calculate win rate based on profit ratio
   const winRate = volume > 0 && pnl > 0 
     ? Math.min(50 + (pnl / volume) * 100, 95) 
     : volume > 0 
@@ -30,78 +23,106 @@ function transformToWhale(trader: LeaderboardTrader, index: number): Whale {
   
   // Generate badges based on performance
   const badges: string[] = [];
-  if (volume > 100000) badges.push('whale');
-  if (winRate > 70) badges.push('sharp-money');
-  if (pnl > volume * 0.2) badges.push('hot-streak');
-  if (index < 10) badges.push('legend');
+  if (volume > 1000000) badges.push('mega-whale');
+  else if (volume > 100000) badges.push('whale');
+  if (winRate > 75) badges.push('sharp-money');
+  else if (winRate > 65) badges.push('consistent');
+  if (pnl > volume * 0.3) badges.push('hot-streak');
+  else if (pnl > volume * 0.1) badges.push('profitable');
+  if (rank <= 10) badges.push('legend');
+  else if (rank <= 50) badges.push('top-50');
   if (trader.verifiedBadge) badges.push('verified');
+  if (portfolioValue > 100000) badges.push('big-portfolio');
 
-  const estimatedTrades = Math.max(1, Math.floor(volume / 500));
+  // Get username from various possible fields
+  const username = trader.name || trader.userName || trader.pseudonym || null;
+
+  // Open/closed positions
+  const openPositions = trader.openPositionCount || 0;
+  const closedPositions = trader.closedPositionCount || 0;
+  const totalPositions = trader.totalPositions || trader.marketsTraded || openPositions + closedPositions;
 
   return {
     id: trader.proxyWallet,
     wallet_address: trader.proxyWallet,
-    username: trader.userName || `Trader_${trader.proxyWallet.slice(0, 6)}`,
-    avatar_url: trader.profileImage || null,
-    bio: null,
+    username,
+    avatar_url: trader.profileImageOptimized || trader.profileImage || null,
+    bio: trader.bio || null,
     category,
     total_volume: volume,
     total_profit: pnl,
+    portfolio_value: portfolioValue,
     win_rate: Math.round(winRate * 10) / 10,
-    total_trades: estimatedTrades,
-    winning_trades: Math.round(estimatedTrades * (winRate / 100)),
-    follower_count: Math.floor(Math.random() * 5000) + 100,
-    is_verified: trader.verifiedBadge || volume > 500000,
+    total_trades: totalPositions,
+    open_positions: openPositions,
+    closed_positions: closedPositions,
+    winning_trades: Math.round(totalPositions * (winRate / 100)),
+    follower_count: 0, // Not available from API
+    is_verified: trader.verifiedBadge || false,
     badges,
+    rank,
+    x_username: trader.xUsername || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
 }
 
-export function usePolymarketLeaderboard() {
+export function usePolymarketLeaderboard(limit: number = 100) {
   return useQuery({
-    queryKey: ['polymarket-leaderboard'],
+    queryKey: ['polymarket-leaderboard', limit],
     queryFn: async (): Promise<Whale[]> => {
-      try {
-        const { data, error } = await supabase.functions.invoke('polymarket-proxy', {
-          body: null,
-        });
+      console.log('Fetching Polymarket leaderboard...');
+      
+      const { data, error } = await supabase.functions.invoke('polymarket-proxy', {
+        body: null,
+      });
 
-        if (error) {
-          console.error('Error fetching leaderboard:', error);
-          throw error;
-        }
-
-        // Transform API response to Whale format
-        if (Array.isArray(data)) {
-          return data.slice(0, 50).map((trader: LeaderboardTrader, index: number) => 
-            transformToWhale(trader, index)
-          );
-        }
-
-        // Handle different response structures
-        if (data?.traders) {
-          return data.traders.slice(0, 50).map((trader: LeaderboardTrader, index: number) => 
-            transformToWhale(trader, index)
-          );
-        }
-
-        console.warn('Unexpected API response format, using empty array');
-        return [];
-      } catch (error) {
-        console.error('Failed to fetch from DOME API:', error);
+      if (error) {
+        console.error('Error fetching leaderboard:', error);
         throw error;
       }
+
+      console.log('Raw API response:', data);
+
+      // Handle error response from edge function
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      // Transform API response to Whale format
+      if (Array.isArray(data)) {
+        console.log(`Transforming ${data.length} traders`);
+        return data.map((trader: PolymarketTrader, index: number) => 
+          transformToWhale(trader, index)
+        );
+      }
+
+      // Handle different response structures
+      if (data?.traders) {
+        return data.traders.map((trader: PolymarketTrader, index: number) => 
+          transformToWhale(trader, index)
+        );
+      }
+
+      if (data?.leaderboard) {
+        return data.leaderboard.map((trader: PolymarketTrader, index: number) => 
+          transformToWhale(trader, index)
+        );
+      }
+
+      console.warn('Unexpected API response format:', data);
+      throw new Error('Unexpected API response format');
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 2,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
   });
 }
 
 export function usePolymarketPositions(walletAddress: string | undefined) {
   return useQuery({
     queryKey: ['polymarket-positions', walletAddress],
-    queryFn: async () => {
+    queryFn: async (): Promise<TraderPosition[]> => {
       if (!walletAddress) return [];
 
       const { data, error } = await supabase.functions.invoke('polymarket-proxy', {
@@ -109,9 +130,31 @@ export function usePolymarketPositions(walletAddress: string | undefined) {
       });
 
       if (error) throw error;
-      return data;
+      if (data?.error) throw new Error(data.error);
+      
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!walletAddress,
     staleTime: 1 * 60 * 1000, // 1 minute
+  });
+}
+
+export function usePolymarketProfile(walletAddress: string | undefined) {
+  return useQuery({
+    queryKey: ['polymarket-profile', walletAddress],
+    queryFn: async (): Promise<PolymarketTrader | null> => {
+      if (!walletAddress) return null;
+
+      const { data, error } = await supabase.functions.invoke('polymarket-proxy', {
+        body: { endpoint: 'profile', user: walletAddress },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      
+      return data;
+    },
+    enabled: !!walletAddress,
+    staleTime: 2 * 60 * 1000,
   });
 }

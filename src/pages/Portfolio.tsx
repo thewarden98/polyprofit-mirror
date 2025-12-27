@@ -13,7 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { mockCopies, mockMirroredPositions } from "@/data/mockCopies";
-import { getCategoryInfo } from "@/data/mockWhales";
+import { getCategoryInfo } from "@/data/whaleHelpers";
 import { cn } from "@/lib/utils";
 
 export default function Portfolio() {

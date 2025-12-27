@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from "recharts";
-import { mockWhales, getCategoryInfo, getBadgeInfo } from "@/data/mockWhales";
+import { getCategoryInfo, getBadgeInfo, formatWallet } from "@/data/whaleHelpers";
+import { usePolymarketLeaderboard } from "@/hooks/usePolymarket";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -31,17 +32,31 @@ export default function CopySetup() {
   const [whaleSharePercent, setWhaleSharePercent] = useState(15);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Find the whale
+  // Fetch live whales data
+  const { data: whales, isLoading } = usePolymarketLeaderboard();
+
+  // Find the whale from live data
   const whale = useMemo(() => 
-    mockWhales.find(w => w.id === whaleId), 
-    [whaleId]
+    whales?.find(w => w.id === whaleId), 
+    [whales, whaleId]
   );
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center py-12">
+          <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+        </div>
+      </Layout>
+    );
+  }
 
   if (!whale) {
     return (
       <Layout>
         <div className="text-center py-12">
-          <h2 className="text-2xl font-bold mb-4">Whale not found</h2>
+          <h2 className="text-2xl font-bold mb-4">Trader not found</h2>
+          <p className="text-muted-foreground mb-4">This trader may no longer be on the leaderboard.</p>
           <Link to="/">
             <Button>Back to Leaderboard</Button>
           </Link>
