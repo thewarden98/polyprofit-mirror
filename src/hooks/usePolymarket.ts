@@ -194,6 +194,22 @@ export function usePolymarketSearch(query: string) {
 }
 
 // Market/Event type from Polymarket
+export interface PolymarketMarket {
+  id: string;
+  question: string;
+  slug?: string;
+  outcomePrices: string | string[];
+  outcomes: string | string[];
+  volume?: number;
+  liquidity?: number;
+  openInterest?: number;
+  bestBid?: number;
+  bestAsk?: number;
+  spread?: number;
+  lastTradePrice?: number;
+  groupItemTitle?: string;
+}
+
 export interface PolymarketEvent {
   id: string;
   title: string;
@@ -203,18 +219,16 @@ export interface PolymarketEvent {
   icon?: string;
   active: boolean;
   closed: boolean;
-  volume: number;
-  liquidity: number;
+  archived?: boolean;
+  ended?: boolean;
+  negRisk?: boolean;
+  volume?: number;
+  liquidity?: number;
+  openInterest?: number;
   startDate?: string;
   endDate?: string;
   category?: string;
-  markets?: {
-    id: string;
-    question: string;
-    outcomePrices: string;
-    outcomes: string;
-    volume?: string;
-  }[];
+  markets?: PolymarketMarket[];
 }
 
 export function usePolymarketMarkets(query: string) {
